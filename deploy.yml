@@ -70,8 +70,6 @@
         include:
           - 'xray'
         dest: /usr/local/bin
-        owner: root
-        group: root
         mode: u=rwx,g=rx,o=rx
       when: not xray_executable.stat.exists
 
@@ -95,9 +93,9 @@
       ansible.builtin.file:
         state: directory
         path: /etc/xray
-        owner: root
-        group: root
-        mode: u=rwx,g=rx,o=rx
+        owner: xray
+        group: xray
+        mode: u=rwx,g=,o=
 
 
 - name: Setup reverse proxy environment
@@ -182,8 +180,6 @@
           - '--transform'
           - 's/acme.sh-{{ acme_sh_version }}\/acme.sh/acme.sh/'
         dest: /usr/local/bin
-        owner: root
-        group: root
         mode: u=rwx,g=rx,o=rx
       when: not acme_sh_executable.stat.exists
 

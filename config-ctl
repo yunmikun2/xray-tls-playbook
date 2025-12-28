@@ -28,6 +28,15 @@ def load_hostname():
 
             return line
 
+def save_hostname(domain):
+    inventory = f"""
+    [servers]
+    {domain}
+    """
+
+    with open('inventory.ini', 'w') as file:
+        file.write(inventory)
+
 def load_secrets():
     if not os.path.isfile('secrets.yml'):
         print('Configure secrets.yml')
@@ -150,6 +159,20 @@ def print_config_info(config):
         generated_at = datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
     print(f'Generated: {generated_at}')
 
+def init_command(domain):
+    if os.path.isfile('inventory.ini'):
+        print('inventory.ini already exists; skipping creation')
+    else:
+        save_hostname(domain)
+
+    if os.path.isfile('secrets.yml'):
+        print('secrets.yml already exists; skipping creation')
+    else:
+        save_secrets({
+            'xray_clients': [],
+            'xray_server': {'path': uuid4()}
+        })
+
 def generate_command():
     for config in configs_info():
         generate_config(config)
@@ -203,15 +226,17 @@ def help_command():
 
     Commands
 
+        init <domain> - Initialize the configuration.
+
         {gen | generate} - Generates the configs.
 
         validate - Validates current configuration.
 
         list - Shows clients info.
 
-        add email - Adds new user with provided email. Id is generated automatically.
+        add <email> - Adds new user with provided email. Id is generated automatically.
 
-        {rem | remove | del | delete} email - Removes specified user.
+        {rem | remove | del | delete} <email-or-id> - Removes specified user.
 
         help - Prints this message.
     """)
@@ -222,7 +247,7 @@ def main():
     argc = len(sys.argv)
 
     if argc == 1:
-        generate_command()
+        help_command()
     elif argc == 2:
         command = sys.argv[1]
 
@@ -241,7 +266,9 @@ def main():
         command = sys.argv[1]
         arg = sys.argv[2]
 
-        if command == 'add':
+        if command == 'init':
+            init_command(arg)
+        elif command == 'add':
             add_command(arg)
         elif command in ['rem', 'remove', 'del', 'delete']:
             remove_command(arg)

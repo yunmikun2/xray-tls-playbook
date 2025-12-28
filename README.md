@@ -2,6 +2,10 @@
 
 ## Configuration
 
+There are two ways to configure the setup. You can do it [manually](#Manual-configuation), but you still are going to need to use `./config-ctl gen` to generate certificates. You also can use [config-ctl](#Configuration-with-config-ctl) script, but you still need to configure your static content by hands.
+
+### Manual configuration
+
 Fill `inventory.ini` with server configuration:
 
 ```ini
@@ -39,6 +43,48 @@ EOF
 ```
 
 It expects you to create an `index.html` file, but you may add any data you need in the directory.
+
+## Configuration with config-ctl
+
+`./config-ctl` script provides basic configuration management features. It's concerned only with local configuration which needs to by applied separately by [deploy.yml](#Deploy) playbook.
+
+When the setup is not configured, you need to initialize it with
+
+```sh
+$ ./config-ctl init <your-domain-name>
+```
+
+After the initialization (either manual or scripted) you can use `add` and `remove` commands to manage users:
+
+```sh
+$ ./config-ctl add <user-email>
+```
+
+To list all the saved users, run
+
+```sh
+$ ./config-ctl list
+```
+
+To remove an existing user, run
+
+```sh
+$ ./config-ctl remove <email-or-id>
+```
+
+Validation of the configuration may be attempted with
+
+```sh
+$ ./config-ctl validate
+```
+
+Script documentation is available via
+
+```sh
+$ ./config-ctl help
+```
+
+or if you run the script without arguments.
 
 ## Deploy
 
@@ -80,10 +126,6 @@ You also can just stop the service without removing all the configuration files 
 ```sh
 $ ansible-playbook shutdown.yml --tags stop
 ```
-
-## Client config generation
-
-`./config-ctl` script provides basic user-management features.
 
 ## Usage
 
