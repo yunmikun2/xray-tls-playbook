@@ -1,0 +1,18 @@
+[Unit]
+Description=Xray TLS front
+Documentation=https://docs.nginx.com
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+User=xray-reverse-proxy
+Group=xray-reverse-proxy
+CapabilityBoundingSet=CAP_CHOWN CAP_SETGID CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_CHOWN CAP_SETGID CAP_NET_BIND_SERVICE
+RuntimeDirectory=xray-reverse-proxy
+LogsDirectory=xray-reverse-proxy
+ExecStart=/usr/sbin/nginx -c /etc/xray-reverse-proxy/nginx.config
+
+[Install]
+WantedBy=multi-user.target

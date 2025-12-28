@@ -1,0 +1,12 @@
+[Unit]
+Description=Manages persistance of saved iptables rules
+Documentation=man:iptables-restore(8)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=iptables-restore /etc/iptables/rules.v4
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,256 @@
+#!/usr/bin/env python
+
+import sys
+import os
+from datetime import datetime
+from uuid import uuid4
+import yaml
+
+CLIENTS_DIR = 'client-configs'
+
+def dict_get(dict, key):
+    try: return dict[key]
+    except KeyError: pass
+
+def ensure_clients_config_dir():
+    try: os.mkdir(CLIENTS_DIR)
+    except FileExistsError: pass
+
+def load_hostname():
+    if not os.path.isfile('inventory.ini'):
+        print('Configure inventory.ini')
+        exit(1)
+
+    with open('inventory.ini') as file:
+        for line in file:
+            if line.strip() in ['[servers]', '']:
+                continue
+
+            return line
+
+def load_secrets():
+    if not os.path.isfile('secrets.yml'):
+        print('Configure secrets.yml')
+        exit(1)
+
+    with open('secrets.yml') as file:
+        return yaml.safe_load(file)
+
+def save_secrets(secrets):
+    with open('secrets.yml', 'w') as file:
+        yaml.dump(secrets, file)
+
+def fetch_server_path(secrets):
+    xray_server = dict_get(secrets, 'xray_server') or {}
+    server_path = dict_get(xray_server, 'path')
+
+    if not server_path:
+        print('secrets.yml error: xray_server.path is not configured')
+        exit(1)
+
+    return server_path
+
+def fetch_clients(secrets):
+    return dict_get(secrets, 'xray_clients') or []    
+
+def find_client(secrets, email_or_id):
+    for client in dict_get(secrets, 'xray_clients'):
+        if email_or_id in [dict_get(client, 'email'), dict_get(client, 'id')]:
+            return client
+
+def config_path(id):
+    return os.path.join(CLIENTS_DIR, f'{id}.json')
+
+def configs_info():
+    secrets = load_secrets()
+    path = fetch_server_path(secrets)
+    hostname = load_hostname()
+
+    def config(client):
+        id = dict_get(client, 'id')
+
+        if not id:
+            print('secrets.yml error: found a client with no id', client)
+            exit(1)
+
+        return {
+            'id': id,
+            'email': dict_get(client, 'email'),
+            'server_path': path,
+            'hostname': hostname,
+            'config_path': config_path(client['id'])
+        }
+
+    return list(map(config , fetch_clients(secrets)))
+
+def render_template(name, **kwargs):
+    from jinja2 import Environment, FileSystemLoader
+    env = Environment(loader = FileSystemLoader('templates'))
+    template = env.get_template(name)
+    return template.render(**kwargs)
+
+def add_user(secrets, email, id):
+    clients = dict_get(secrets, 'xray_clients') or []
+
+    for client in clients:
+        if dict_get(client, 'email') == email:
+            print('User with such email already exists', client)
+            exit(3)
+        if dict_get(client, 'id') == id:
+            # This condition only occures when it accidentally
+            # generates an ID that already exists.
+            print('User with such id already exists', client)
+            exit(3)
+
+    clients.append({
+        'email': email,
+        'id': id,
+    })
+
+    secrets['xray_clients'] = clients
+    save_secrets(secrets)
+
+def remove_user(secrets, id):
+    secrets['xray_clients'] = [
+        c for c in (dict_get(secrets, 'xray_clients') or [])
+        if dict_get(c, 'id') != id
+    ]
+    save_secrets(secrets)
+
+def generate_config(config):
+    payload = render_template(
+        'client-config.json.j2',
+        email=config['email'],
+        id=config['id'],
+        hostname=config['hostname'],
+        path=config['server_path']
+    )
+
+    with open(config['config_path'], 'w') as file:
+        file.write(payload)
+
+def remove_config(id):
+    os.remove(config_path(id))
+
+def print_config_info(config):
+    print('---')
+
+    email = config['email']
+    if email:
+        print(f'E-mail:    {email}')
+
+    print(f'Id:        {config['id']}')
+
+    path = config['config_path']
+    print(f'Config:    {path}')
+
+    generated_at = 'Not generated'
+    if os.path.isfile(path):
+        ts = os.path.getmtime(path)
+        generated_at = datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+    print(f'Generated: {generated_at}')
+
+def generate_command():
+    for config in configs_info():
+        generate_config(config)
+
+def list_command():
+    for config in configs_info():
+        print_config_info(config)
+
+def add_command(email):
+    hostname = load_hostname()
+    secrets = load_secrets()
+    server_path = fetch_server_path(secrets)
+    id = str(uuid4())
+
+    add_user(secrets, email, id)
+
+    generate_config({
+        'email': email,
+        'id': id,
+        'hostname': hostname,
+        'server_path': server_path,
+        'config_path': config_path(id),
+    })
+
+def remove_command(email_or_id):
+    secrets = load_secrets()
+    client = find_client(secrets, email_or_id)
+
+    if not client:
+        print('User with such email or id is not found')
+        exit(3)
+
+    id = dict_get(client, 'id')
+
+    if not id:
+        print("secrets.yml error: found a client with no id", client)
+        exit(3)
+
+    remove_user(secrets, id)
+    remove_config(id)
+
+def validate_command():
+    load_hostname()
+    configs_info()
+
+def help_command():
+    print("""
+    Usage
+
+        ./config-ctl [command] [args...]
+
+    Commands
+
+        {gen | generate} - Generates the configs.
+
+        validate - Validates current configuration.
+
+        list - Shows clients info.
+
+        add email - Adds new user with provided email. Id is generated automatically.
+
+        {rem | remove | del | delete} email - Removes specified user.
+
+        help - Prints this message.
+    """)
+
+def main():
+    ensure_clients_config_dir()
+
+    argc = len(sys.argv)
+
+    if argc == 1:
+        generate_command()
+    elif argc == 2:
+        command = sys.argv[1]
+
+        if command in ['gen', 'generate']:
+            generate_command()
+        elif command == 'validate':
+            validate_command()
+        elif command == 'list':
+            list_command()
+        elif command == 'help':
+            help_command()
+        else:
+            help_command()
+            exit(2)
+    elif argc == 3:
+        command = sys.argv[1]
+        arg = sys.argv[2]
+
+        if command == 'add':
+            add_command(arg)
+        elif command in ['rem', 'remove', 'del', 'delete']:
+            remove_command(arg)
+        else:
+            help_command()
+            exit(2)
+    elif argc > 3:
+        help_command()
+        exit(2)
+
+if __name__ == '__main__':
+    main()

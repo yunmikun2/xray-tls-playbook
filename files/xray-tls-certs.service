@@ -1,0 +1,15 @@
+[Unit]
+Description=Manages renewing the TLS sertificate used by xray-reverse-proxy.service.
+Documentation=https://github.com/acmesh-official/acme.sh
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Restart=on-failure
+User=xray-reverse-proxy
+Group=xray-reverse-proxy
+ExecStart=xray-tls-certs
+
+[Install]
+WantedBy=multi-user.target

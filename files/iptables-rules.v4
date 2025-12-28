@@ -1,0 +1,11 @@
+*filter
+:INPUT DROP [91655:16713259]
+:FORWARD DROP [0:0]
+:OUTPUT ACCEPT [0:0]
+-A INPUT -i lo -j ACCEPT
+-A INPUT -m conntrack --ctstate INVALID -j DROP
+-A INPUT -i eth0 -p icmp -j ACCEPT
+-A INPUT -i eth0 -p tcp -m multiport --dports 22,80,443 -j ACCEPT
+-A INPUT -i eth0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A INPUT -p tcp -j REJECT --reject-with tcp-reset
+COMMIT

@@ -1,0 +1,329 @@
+---
+
+- name: Install packages
+  hosts: servers
+
+  pre_tasks:
+    - ansible.builtin.apt:
+        update_cache: yes
+        name: '{{ item }}'
+      loop:
+        - unzip
+        - gzip
+        - nginx
+        - net-tools
+
+    - name: Disable default nginx configuration
+      ansible.builtin.systemd_service:
+        name: nginx.service
+        state: stopped
+        enabled: no
+
+    - name: Ensure local systemd service directory exists
+      ansible.builtin.file:
+        state: directory
+        path: /usr/local/lib/systemd/system
+        mode: u=rw,o=r,g=r
+
+
+- name: Configure iptables environment
+  hosts: servers
+
+  tasks:
+    - name: Ensure config directory exists
+      ansible.builtin.file:
+        path: /etc/iptables
+        state: directory
+        mode: u=rwx,g=rx,o=rx
+
+    - name: Create systemd service
+      ansible.builtin.copy:
+        src: iptables.service
+        dest: /usr/local/lib/systemd/system/iptables.service
+        mode: u=rw,g=r,o=r
+
+
+- name: Setup xray environment
+  hosts: servers
+
+  vars:
+    xray_version: '25.12.8'
+    xray_checksum: 'sha256:97f20fed49750c24fc389c2946549ba2a374907e07e9adb2ce75799dd80088d9'
+
+  tasks:
+    - name: Check if installed
+      ansible.builtin.stat:
+        path: /usr/local/bin/xray
+      register: xray_executable
+
+    - name: Download
+      ansible.builtin.get_url:
+        url: "https://github.com/XTLS/Xray-core/releases/download/v{{ xray_version }}/Xray-linux-64.zip"
+        checksum: '{{ xray_checksum }}'
+        dest: '/tmp/xray-v{{ xray_version }}.zip'
+      when: not xray_executable.stat.exists
+
+    - name: Unpack
+      ansible.builtin.unarchive:
+        src: '/tmp/xray-v{{ xray_version }}.zip'
+        remote_src: yes
+        include:
+          - 'xray'
+        dest: /usr/local/bin
+        owner: root
+        group: root
+        mode: u=rwx,g=rx,o=rx
+      when: not xray_executable.stat.exists
+
+    - name: Create xray group
+      ansible.builtin.group:
+        name: xray
+
+    - name: Create xray user
+      ansible.builtin.user:
+        name: xray
+        group: xray
+        create_home: no
+
+    - name: Create systemd service
+      ansible.builtin.copy:
+        src: xray.service
+        dest: /usr/local/lib/systemd/system/xray.service
+        mode: u=rw,o=r,g=r
+
+    - name: Ensure config directory exists
+      ansible.builtin.file:
+        state: directory
+        path: /etc/xray
+        owner: root
+        group: root
+        mode: u=rwx,g=rx,o=rx
+
+
+- name: Setup reverse proxy environment
+  hosts: servers
+
+  tasks:
+    - name: Create xray-reverse-proxy group
+      ansible.builtin.group:
+        name: xray-reverse-proxy
+
+    - name: Create xray-reverse-proxy user
+      ansible.builtin.user:
+        name: xray-reverse-proxy
+        group: xray-reverse-proxy
+        create_home: yes
+        home: /var/xray-reverse-proxy
+
+    - name: Create systemd service
+      ansible.builtin.copy:
+        src: xray-reverse-proxy.service
+        dest: /usr/local/lib/systemd/system/xray-reverse-proxy.service
+        mode: u=rw,o=r,g=r
+
+    - name: Ensure web-server config directory exists
+      ansible.builtin.file:
+        path: /etc/xray-reverse-proxy
+        state: directory
+        mode: u=rwx,g=rx,o=rx
+
+    - name: Ensure certs folder exists
+      ansible.builtin.file:
+        path: /var/xray-reverse-proxy/certs
+        state: directory
+        owner: xray-reverse-proxy
+        group: xray-reverse-proxy
+        mode: u=rwx,g=,o=
+
+    - name: Ensure challenge folder exists
+      ansible.builtin.file:
+        path: /var/xray-reverse-proxy/challenge
+        state: directory
+        owner: xray-reverse-proxy
+        group: xray-reverse-proxy
+        mode: u=rwx,g=,o=
+
+    - name: Ensure static directory exists
+      ansible.builtin.file:
+        path: /var/xray-reverse-proxy/static/
+        state: directory
+        owner: xray-reverse-proxy
+        group: xray-reverse-proxy
+        mode: u=rwx,g=,o=
+
+
+- name: Setup TLS certificate renewal environment
+  hosts: servers
+
+  vars:
+    acme_sh_version: '3.1.0'
+    acme_sh_checksum: 'sha256:5bc8a72095e16a1a177d1a516728bbd3436abf8060232d5d36b462fce74447aa'
+
+  tasks:
+    - name: Check if acme.sh is installed
+      ansible.builtin.stat:
+        path: /usr/local/bin/acme.sh
+      register: acme_sh_executable
+
+    - name: Download acme.sh
+      ansible.builtin.get_url:
+        url: 'https://github.com/acmesh-official/acme.sh/archive/refs/tags/{{ acme_sh_version }}.tar.gz'
+        checksum: '{{ acme_sh_checksum }}'
+        dest: '/tmp/acme.sh-{{ acme_sh_version }}.tar.gz'
+      when: not acme_sh_executable.stat.exists
+
+    - name: Install acme.sh
+      ansible.builtin.unarchive:
+        src: '/tmp/acme.sh-{{ acme_sh_version }}.tar.gz'
+        remote_src: yes
+        include:
+          - 'acme.sh-{{ acme_sh_version }}/acme.sh'
+        extra_opts:
+          - '--transform'
+          - 's/acme.sh-{{ acme_sh_version }}\/acme.sh/acme.sh/'
+        dest: /usr/local/bin
+        owner: root
+        group: root
+        mode: u=rwx,g=rx,o=rx
+      when: not acme_sh_executable.stat.exists
+
+    - name: Install xray-tls-certs script
+      ansible.builtin.copy:
+        src: xray-tls-certs
+        dest: /usr/local/bin/xray-tls-certs
+        mode: u=rwx,g=rx,o=rx
+
+    - name: Create systemd service
+      ansible.builtin.copy:
+        src: xray-tls-certs.service
+        dest: /usr/local/lib/systemd/system/xray-tls-certs.service
+        mode: u=rw,g=r,o=r
+
+    - name: Create systemd timer
+      ansible.builtin.copy:
+        src: xray-tls-certs.timer
+        dest: /usr/local/lib/systemd/system/xray-tls-certs.timer
+        mode: u=rw,g=r,o=r
+      register: systemd_timer
+
+    - name: Ensure config directory exists
+      ansible.builtin.file:
+        path: /etc/xray-reverse-proxy/xray-tls-certs
+        state: directory
+        owner: xray-reverse-proxy
+        group: xray-reverse-proxy
+        mode: u=rwx,g=rx,o=rx
+
+
+- name: Handle systemd updates
+  hosts: servers
+  tasks:
+    - name: Reload systemd units
+      ansible.builtin.systemd_service:
+        daemon_reload: yes
+
+
+- name: Start iptables
+  hosts: servers
+
+  tasks:
+    - name: Create iptables config
+      ansible.builtin.copy:
+        src: iptables-rules.v4
+        dest: /etc/iptables/rules.v4
+      register: config
+
+    - name: Start systemd unit
+      ansible.builtin.systemd_service:
+        name: iptables.service
+        enabled: yes
+        state: restarted
+      when: config.changed
+
+
+- name: Start xray
+  hosts: servers
+  tags: [ reconfigure ]
+
+  vars_files:
+    - secrets.yml
+
+  vars:
+    xray_config_yml: "{{ lookup('template', 'templates/xray-config.yml.j2') }}"
+    xray_config_json: "{{ xray_config_yml | from_yaml | tojson(indent=2) }}"
+
+  tasks:
+    - name: Set up xray config
+      ansible.builtin.copy:
+        content: "{{ xray_config_json }}"
+        dest: /etc/xray/config.json
+        owner: xray
+        group: xray
+        mode: u=r,o=,g=
+      register: config
+
+    - name: Start systemd unit
+      ansible.builtin.systemd_service:
+        name: xray.service
+        enabled: yes
+        state: restarted
+      when: config.changed
+
+
+- name: Start TLS certificate renewal
+  hosts: servers
+
+  tasks:
+    - name: Set hostname config value
+      ansible.builtin.copy:
+        content: '{{ inventory_hostname }}'
+        dest: /etc/xray-reverse-proxy/xray-tls-certs/hostname
+        owner: xray-reverse-proxy
+        group: xray-reverse-proxy
+        mode: u=rw,g=r,o=r
+      register: config
+
+    - name: Start systemd unit
+      ansible.builtin.systemd_service:
+        name: xray-tls-certs.timer
+        enabled: yes
+        state: restarted
+      when: config.changed
+
+    - name: Issue a certificate if it's not present
+      ansible.builtin.command:
+        cmd: /usr/local/bin/xray-tls-certs
+        creates: '/var/xray-reverse-proxy/certs/fullchain.pem'
+
+
+- name: Start reverse proxy
+  hosts: servers
+
+  vars_files:
+    - secrets.yml
+
+  tasks:
+    - name: Create web-server config
+      tags: [ reconfigure ]
+      ansible.builtin.template:
+        src: xray-reverse-proxy.config.j2
+        dest: /etc/xray-reverse-proxy/nginx.config
+        mode: u=rw,g=r,o=r
+      register: config
+
+    - name: Create static content
+      tags: [ static ]
+      ansible.builtin.copy:
+        src: static/
+        dest: /usr/local/share/xray-reverse-proxy/static/
+        owner: xray-reverse-proxy
+        group: xray-reverse-proxy
+        mode: u=r,o=,g=
+
+    - name: Start systemd unit
+      tags: [ reconfigure ]
+      ansible.builtin.systemd_service:
+        name: xray-reverse-proxy.service
+        enabled: yes
+        state: restarted
+      when: config.changed

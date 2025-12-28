@@ -1,0 +1,48 @@
+{
+  "log": {
+    "loglevel": "debug"
+  },
+  "inbounds": [
+    {
+      "listen": "127.0.0.1",
+      "port": 1337,
+      "protocol": "socks",
+      "settings": {
+        "udp": true
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "{{ hostname }}",
+            "port": 443,
+            "users": [
+              {
+                "id": "{{ id }}",
+{% if email %}
+                "email": "{{ email }}",
+{% endif %}
+                "encryption": "none"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "splithttp",
+        "splithttpSettings": {
+          "path": "/{{ path }}/"
+        },
+        "security": "tls",
+        "tlsSettings": {
+          "serverName": ""
+        }
+      },
+      "tag": "proxy"
+    }
+  ]
+}

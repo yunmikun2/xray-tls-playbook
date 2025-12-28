@@ -1,0 +1,8 @@
+[Unit]
+Description=Schedules xray-tls-certs.service
+
+[Timer]
+OnCalendar=daily
+
+[Install]
+WantedBy=timers.target

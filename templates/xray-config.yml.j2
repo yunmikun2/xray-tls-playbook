@@ -1,0 +1,31 @@
+log:
+  loglevel: debug
+
+inbounds:
+  - listen: '127.0.0.1'
+    port: 1337
+    protocol: vless
+
+    settings:
+      clients:
+{% for client in xray_clients %}
+        - email: '{{ client.email }}'
+          id: '{{ client.id }}'
+{% endfor %}
+      decryption: none
+
+    streamSettings:
+      network: splithttp
+      splithttpSettings:
+        path: '/{{ xray_server.path }}'
+
+    sniffing:
+      enabled: yes
+      destOverride:
+        - http
+        - tls
+        - quic
+
+outbounds:
+  - protocol: freedom
+    tag: direct

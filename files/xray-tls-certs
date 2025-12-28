@@ -1,0 +1,44 @@
+#!/bin/sh -e
+
+domain="$(cat /etc/xray-tls-certs/hostname)"
+
+if [ -e ~/.acme.sh/"${domain}"_ecc/"${domain}".conf ]; then
+    action=--renew
+else
+    action=--issue
+fi
+
+if ss -tuplen | grep 80 >> /dev/null; then
+    mode='--webroot /var/xray-reverse-proxy/challenge'
+else
+    mode=--standalone
+fi
+
+set +e
+
+/usr/local/bin/acme.sh \
+    "$action" \
+    --domain "$domain" \
+    $mode \
+    --server letsencrypt
+
+exit_code="$?"
+
+if [ "$exit_code" != 0 ]; then
+    if [ "$action" != '--issue' ]; then
+        echo Skipping installation and restart
+        exit 0
+    else
+        exit "$exit_code"
+    fi
+fi
+
+set -e
+
+/usr/local/bin/acme.sh \
+    --install-cert \
+    --domain "$domain" \
+    --fullchain-file "/var/xray-reverse-proxy/certs/fullchain.pem" \
+    --key-file "/var/xray-reverse-proxy/certs/key.pem"
+
+nginx -c /etc/xray-reverse-proxy/nginx.config -s reload
