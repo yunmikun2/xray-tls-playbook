@@ -6,6 +6,9 @@ events {
 }
 
 http {
+     client_body_temp_path /var/xray-reverse-proxy/temp;
+     proxy_max_temp_file_size 20m;
+
     server {
         listen 443 http2 ssl;
         listen [::]:443 http2 ssl;

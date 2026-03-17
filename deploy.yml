@@ -125,7 +125,15 @@
         state: directory
         mode: u=rwx,g=rx,o=rx
 
-    - name: Ensure certs folder exists
+    - name: Ensure temp directory exists
+      ansible.builtin.file:
+        path: /var/xray-reverse-proxy/temp
+        state: directory
+        owner: xray-reverse-proxy
+        group: xray-reverse-proxy
+        mode: u=rwx,g=,o=
+
+    - name: Ensure certs directory exists
       ansible.builtin.file:
         path: /var/xray-reverse-proxy/certs
         state: directory
@@ -133,7 +141,7 @@
         group: xray-reverse-proxy
         mode: u=rwx,g=,o=
 
-    - name: Ensure challenge folder exists
+    - name: Ensure challenge directory exists
       ansible.builtin.file:
         path: /var/xray-reverse-proxy/challenge
         state: directory
