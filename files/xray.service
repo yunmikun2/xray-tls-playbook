@@ -8,8 +8,6 @@ Wants=network-online.target
 Type=simple
 User=xray
 Group=xray
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
-AmbientCapabilities=CAP_NET_BIND_SERVICE
 ExecStart=/usr/local/bin/xray run -config /etc/xray/config.json
 
 [Install]

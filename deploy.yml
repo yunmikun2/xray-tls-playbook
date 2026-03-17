@@ -47,8 +47,8 @@
   hosts: servers
 
   vars:
-    xray_version: '25.12.8'
-    xray_checksum: 'sha256:97f20fed49750c24fc389c2946549ba2a374907e07e9adb2ce75799dd80088d9'
+    xray_version: '26.2.6'
+    xray_checksum: 'sha256:29ce535b56e207a406ffa1c2d4842dcc410be003eff8ec508bb732abc9f8e385'
 
   tasks:
     - name: Check if installed

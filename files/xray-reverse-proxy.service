@@ -2,6 +2,8 @@
 Description=Xray TLS front
 Documentation=https://docs.nginx.com
 After=network-online.target
+After=xray.service
+Requires=xray-tls-certs.timer xray.service
 Wants=network-online.target
 
 [Service]
